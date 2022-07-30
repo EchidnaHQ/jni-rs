@@ -9,10 +9,21 @@ use std::{
 use log::{debug, error};
 
 use crate::{errors::*, sys, JNIEnv};
-
+// TODO vec for multiple widgets
 #[cfg(feature = "invocation")]
-use crate::InitArgs;
+thread_local! {
+    static JVM: RefCell<Option<RefCell<JavaVM>>> = RefCell::new(None);
+}
+#[cfg(feature = "invocation")]
+use crate::{InitArgs, InitArgsBuilder};
 
+#[cfg(target_os = "android")]
+lazy_static::lazy_static! {
+    static ref VM: JavaVM = {
+        let android_context = ndk_context::android_context();
+        unsafe { JavaVM::from_raw(android_context.vm().cast()) }.unwrap()
+    };
+}
 /// The Java VM, providing [Invocation API][invocation-api] support.
 ///
 /// The JavaVM can be obtained either via [`JNIEnv#get_java_vm`][get-vm] in an already attached
@@ -131,6 +142,7 @@ use crate::InitArgs;
 /// [actd]: struct.JavaVM.html#method.attach_current_thread_as_daemon
 /// [spec-references]: https://docs.oracle.com/en/java/javase/12/docs/specs/jni/design.html#referencing-java-objects
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct JavaVM(*mut sys::JavaVM);
 
 unsafe impl Send for JavaVM {}
@@ -174,6 +186,14 @@ impl JavaVM {
     pub unsafe fn from_raw(ptr: *mut sys::JavaVM) -> Result<Self> {
         non_null!(ptr, "from_raw ptr argument");
         Ok(JavaVM(ptr))
+    }
+
+    ///
+    /// Set the current VM instance as the default VM instance . The VM instance will then be owned by a thread local storage.
+    ///
+    #[cfg(feature = "invocation")]
+    pub fn set_default(self) {
+        JVM.with(move |jvm| jvm.replace(Some(RefCell::new(self))));
     }
 
     /// Returns underlying `sys::JavaVM` interface.
@@ -439,6 +459,41 @@ impl Drop for InternalAttachGuard {
                 current().name().unwrap_or_default(),
                 current().id(),
             );
+        }
+    }
+}
+
+impl Default for JavaVM {
+    ///
+    /// On Android, this will get the raw JavaVM pointer from the [ndk_context] crate and cast it to [JavaVM].
+    ///
+    /// On other platforms, this will still be implemented!! It will create a JavaVM with default configurations when the `invocation` feature is enabled.
+    /// If you want to make the VM with custom configurations, you will have to make it first beforehand and set it as the default with [JavaVM#set_default].
+    ///
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "android")]{
+                *VM
+            } else if #[cfg(feature = "invocation")] {
+                if JVM.with(|jvm| jvm.borrow().is_none()) {
+                    let vm = Self::new(InitArgsBuilder::new()
+                    // Pass the JNI API version (default is 8)
+                    .version(JNIVersion::V8)
+                    // You can additionally pass any JVM options (standard, like a system property,
+                    // or VM-specific).
+                    // Here we enable some extra JNI checks useful during development
+                    .option("-Xcheck:jni")
+                    .build()
+                    .unwrap());
+
+                    vm.set_default();
+
+                 }
+
+                 unsafe { Self::from_raw(JVM.with(|jvm| jvm.borrow().clone().unwrap().borrow().get_java_vm_pointer())) }
+            } else {
+                panic!("We're not able to retrieve the default JavaVM because it is not set yet!!!")
+            }
         }
     }
 }
