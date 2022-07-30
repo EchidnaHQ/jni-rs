@@ -12,7 +12,7 @@ use crate::{
 /// call.
 pub struct JMap<'a: 'b, 'b> {
     internal: JObject<'a>,
-    class: AutoLocal<'a, 'b>,
+    class: AutoLocal<'a>,
     get: JMethodID<'a>,
     put: JMethodID<'a>,
     remove: JMethodID<'a>,
@@ -192,7 +192,7 @@ pub struct JMapIter<'a, 'b, 'c> {
     next: JMethodID<'a>,
     get_key: JMethodID<'a>,
     get_value: JMethodID<'a>,
-    iter: AutoLocal<'a, 'b>,
+    iter: AutoLocal<'a>,
 }
 
 impl<'a: 'b, 'b: 'c, 'c> JMapIter<'a, 'b, 'c> {

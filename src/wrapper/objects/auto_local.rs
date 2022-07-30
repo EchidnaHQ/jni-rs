@@ -23,18 +23,18 @@ use crate::{objects::JObject, JNIEnv};
 ///
 /// [spec-references]: https://docs.oracle.com/en/java/javase/12/docs/specs/jni/design.html#referencing-java-objects
 /// [android-jni-references]: https://developer.android.com/training/articles/perf-jni#local-and-global-references
-pub struct AutoLocal<'a: 'b, 'b> {
+pub struct AutoLocal<'a> {
     obj: JObject<'a>,
-    env: &'b JNIEnv<'a>,
+    env: JNIEnv<'a>,
 }
 
-impl<'a, 'b> AutoLocal<'a, 'b> {
+impl<'a> AutoLocal<'a> {
     /// Creates a new auto-delete wrapper for a local ref.
     ///
     /// Once this wrapper goes out of scope, the `delete_local_ref` will be
     /// called on the object. While wrapped, the object can be accessed via
     /// the `Deref` impl.
-    pub fn new(env: &'b JNIEnv<'a>, obj: JObject<'a>) -> Self {
+    pub fn new(env: JNIEnv<'a>, obj: JObject<'a>) -> Self {
         AutoLocal { obj, env }
     }
 
@@ -61,9 +61,20 @@ impl<'a, 'b> AutoLocal<'a, 'b> {
     {
         self.obj
     }
+    ///
+    /// Get the JNIEnv used for this AutoLocal
+    ///
+    /// The code is exactly the same as the one for `as_obj`, it just gets the JNIEnv instead!!
+    ///
+    pub fn jni_env<'c>(&self) -> &JNIEnv<'c>
+    where
+        'a: 'c,
+    {
+        &self.env
+    }
 }
 
-impl<'a, 'b> Drop for AutoLocal<'a, 'b> {
+impl<'a> Drop for AutoLocal<'a> {
     fn drop(&mut self) {
         let res = self.env.delete_local_ref(self.obj);
         match res {
@@ -73,7 +84,7 @@ impl<'a, 'b> Drop for AutoLocal<'a, 'b> {
     }
 }
 
-impl<'a> From<&'a AutoLocal<'a, '_>> for JObject<'a> {
+impl<'a> From<&'a AutoLocal<'a>> for JObject<'a> {
     fn from(other: &'a AutoLocal) -> JObject<'a> {
         other.as_obj()
     }

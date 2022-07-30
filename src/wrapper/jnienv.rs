@@ -363,11 +363,11 @@ impl<'a> JNIEnv<'a> {
     /// can be more convenient when you create a _bounded_ number of local references
     /// but cannot rely on automatic de-allocation (e.g., in case of recursion, deep call stacks,
     /// [permanently-attached](struct.JavaVM.html#attaching-native-threads) native threads, etc.).
-    pub fn auto_local<'b, O>(&'b self, obj: O) -> AutoLocal<'a, 'b>
+    pub fn auto_local<'b, O>(&'b self, obj: O) -> AutoLocal<'a>
     where
         O: Into<JObject<'a>>,
     {
-        AutoLocal::new(self, obj.into())
+        AutoLocal::new(*self, obj.into())
     }
 
     /// Deletes the local reference.
@@ -2029,6 +2029,24 @@ impl<'a> JNIEnv<'a> {
     ) -> Result<AutoArray<jint>> {
         self.get_array_elements(array, mode)
     }
+    /*  ///
+    ///
+    ///
+    pub fn default(vm: Option<&JavaVM>) {
+        let jvm;
+        let rvm;
+        let rvm2;
+        jvm = match vm {
+            Some(vm) => vm,
+            None => {
+                rvm = JavaVM::default();
+
+                rvm2 = rvm.borrow();
+
+                rvm2.deref()
+            }
+        };
+    }*/
 
     /// See also [`get_array_elements`](struct.JNIEnv.html#method.get_array_elements)
     pub fn get_long_array_elements(
